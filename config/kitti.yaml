@@ -1,0 +1,41 @@
+%YAML:1.0
+# dataset_dir
+dataset_dir: ./data/kitti/odometry/dataset/sequences/
+
+# kitti config
+num_cams_actual: 4
+
+save_predicted_traj_to: ./cam_traj.txt
+
+# VO Parameters
+
+# ------------------- Feature Matching -------------------
+# ORB settings
+number_of_features: 1000
+scale_factor: 1.2
+level_pyramid: 4
+score_threshold: 20
+match_ratio: 2.0
+
+# ------------------- RANSAC Essential matrix -------------------
+findEssentialMat_prob: 0.999
+findEssentialMat_threshold: 1.0
+
+# ------------------- Triangulation -------------------
+min_triang_angle: 1.0
+max_ratio_between_max_angle_and_median_angle: 20
+initialization_sigma: 1.0
+
+# ------------------- Initialization -------------------
+min_inlier_matches: 15
+min_pixel_dist: 50
+min_median_triangulation_angle: 2.0
+assumed_mean_pts_depth_during_vo_init: 25
+
+# ------------------- Tracking -------------------
+min_dist_between_two_keyframes: 0.5
+min_rotation_angle_betwen_two_keyframes: 0.5
+max_possible_dist_to_prev_frame: 10
+
+# ------------------- Bundle Adjustment -------------------
+is_ba_fix_map_points: true
