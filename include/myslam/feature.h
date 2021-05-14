@@ -31,10 +31,15 @@ public:
     cv::Mat descriptor_;                    // 关键点描述子
     std::weak_ptr<MapPoint> map_point_;     // 关联地图点
 
-    bool is_outlier_ = false;               // 是否为异常点
+    bool is_inlier_ = false;                // 是否为内点
+
+    bool associate_new_map_point_ = false;
 
 public:
     Feature() {}
+
+    Feature(std::shared_ptr<Frame> frame, const cv::KeyPoint &kp)
+            : frame_(frame), position_(kp){}
 
     Feature(std::shared_ptr<Frame> frame, const cv::KeyPoint &kp, const cv::Mat &descriptor)
             : frame_(frame), position_(kp), descriptor_(descriptor) {}

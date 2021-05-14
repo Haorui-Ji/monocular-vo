@@ -54,7 +54,7 @@ cv::Point2f Camera::world2pixel ( const cv::Point3f &p, const cv::Mat &T_c_w)
     return camera2pixel ( world2camera(p, T_c_w) );
 }
 
-cv::Point3f Camera::pixel2world ( const cv::Point2f &p, double depth, const cv::Mat &T_c_w )
+cv::Point3f Camera::pixel2world ( const cv::Point2f &p, const cv::Mat &T_c_w, double depth )
 {
     return camera2world ( pixel2camera ( p, depth ), T_c_w );
 }

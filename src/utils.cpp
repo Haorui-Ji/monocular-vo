@@ -58,6 +58,11 @@ namespace myslam {
                 T.at<double>(2, 3));
     }
 
+    cv::Mat getPosFromT(const cv::Mat &T)
+    {
+        return T(cv::Rect(3, 0, 1, 3)).clone();
+    }
+
     cv::Point3f transCoord(const cv::Point3f &p, const cv::Mat &R, const cv::Mat &t)
     {
         cv::Mat p1 = (cv::Mat_<double>(3, 1) << p.x, p.y, p.z);
@@ -65,11 +70,25 @@ namespace myslam {
         return cv::Point3f(p2.at<double>(0, 0), p2.at<double>(1, 0), p2.at<double>(2, 0));
     }
 
-    cv::Point3f transCoord(const cv::Point3f &p, const cv::Mat T4x4)
+    cv::Point3f transCoord(const cv::Point3f &p, const cv::Mat &T4x4)
     {
-        const cv::Mat &T = T4x4;
         cv::Mat p1 = (cv::Mat_<double>(4, 1) << p.x, p.y, p.z, 1);
         cv::Mat p2 = T4x4 * p1;
         return cv::Point3f(p2.at<double>(0, 0), p2.at<double>(1, 0), p2.at<double>(2, 0));
+    }
+
+    double calcAngleBetweenTwoVectors(const cv::Mat &vec1, const cv::Mat &vec2)
+    {
+        // cos(angle) = vec1.dot(vec2) / (||vec1|| * ||vec2||)
+        assert(vec1.rows == vec2.rows && vec1.rows > vec1.cols);
+        int N = vec1.rows;
+        double res = 0;
+        for (int i = 0; i < N; i++)
+        {
+            res += vec1.at<double>(i, 0) * vec2.at<double>(i, 0);
+        }
+        double norm = cv::norm(vec1) * cv::norm(vec2);
+        assert(norm != 0);
+        return acos(res / norm);
     }
 }

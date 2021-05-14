@@ -36,10 +36,11 @@ public:
     // Pinhole RGB Camera model
     Camera::Ptr camera_;
 
-    // extracted features in left image
+    // extracted features from image
     vector<std::shared_ptr<Feature>> features_;
 
-    vector<cv::DMatch> matches_with_ref_frame_;         // matches with last frame
+    vector<cv::DMatch> matches_with_ref_frame_;         // matches with reference frame
+    vector<cv::DMatch> matches_with_last_frame_;        // matches with last frame
 
 public:  // data members
     Frame() {}

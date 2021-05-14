@@ -16,6 +16,7 @@
 #include <typeinfo>
 #include <unordered_map>
 #include <vector>
+#include <fstream>
 
 // eigen
 #include <Eigen/Core>

@@ -38,8 +38,6 @@ public:
 
     void SetBackend(std::shared_ptr<Backend> backend) { backend_ = backend; }
 
-    void SetViewer(std::shared_ptr<Viewer> viewer) { viewer_ = viewer; }
-
     FrontendStatus GetStatus() const { return status_; }
 
     void SetCamera(Camera::Ptr camera) {
@@ -76,6 +74,8 @@ private:
      * Track with last frame
      * @return num of tracked points
      */
+    int TrackLastFrame();
+
     int TrackRefFrame();
 
     /**
@@ -113,8 +113,10 @@ private:
      */
     void SetObservationsForKeyFrame();
 
+    bool IsGoodToInit();
+
     // data
-    FrontendStatus status_ = FrontendStatus::INITING;
+    FrontendStatus status_ = FrontendStatus::BLANK;
 
     Frame::Ptr current_frame_ = nullptr;        // 当前帧
     Frame::Ptr last_frame_ = nullptr;           // 上一帧
@@ -123,7 +125,6 @@ private:
 
     Map::Ptr map_ = nullptr;
     std::shared_ptr<Backend> backend_ = nullptr;
-    std::shared_ptr<Viewer> viewer_ = nullptr;
 
     cv::Mat relative_motion_;  // 当前帧与上一帧的相对运动，用于估计当前帧 pose 初值
 
@@ -131,8 +132,8 @@ private:
 
     // params
     int num_features_tracking_ = 50;
-    int num_features_tracking_bad_ = 20;
-    int num_features_needed_for_keyframe_ = 80;
+    int num_features_tracking_bad_ = 5;
+    int num_features_needed_for_keyframe_ = 100;
 
     // utilities
     cv::Ptr<cv::ORB> orb_;  // feature detector in opencv

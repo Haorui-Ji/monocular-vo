@@ -1,11 +1,8 @@
 %YAML:1.0
 # dataset_dir
-dataset_dir: ./data/kitti/odometry/dataset/sequences/
+dataset_dir: ./data/kitti/odometry/dataset/sequences/05
 
-# kitti config
-num_cams_actual: 4
-
-save_predicted_traj_to: ./cam_traj.txt
+save_predicted_traj_to: ./result/cam_traj_05.txt
 
 # VO Parameters
 
@@ -30,12 +27,10 @@ initialization_sigma: 1.0
 min_inlier_matches: 15
 min_pixel_dist: 50
 min_median_triangulation_angle: 2.0
-assumed_mean_pts_depth_during_vo_init: 25
 
 # ------------------- Tracking -------------------
-min_dist_between_two_keyframes: 0.5
+min_dist_between_two_keyframes: 1.0
 min_rotation_angle_betwen_two_keyframes: 0.5
-max_possible_dist_to_prev_frame: 10
 
 # ------------------- Bundle Adjustment -------------------
 is_ba_fix_map_points: true

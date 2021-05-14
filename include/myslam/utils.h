@@ -32,9 +32,13 @@ namespace myslam
 
     void getRtFromT(const cv::Mat &T, cv::Mat &R, cv::Mat &t);
 
-    cv::Point3f transCoord(const cv::Point3f &p1, const cv::Mat &R, const cv::Mat &t);
+    cv::Mat getPosFromT(const cv::Mat &T);
 
-    cv::Point3f transCoord(const cv::Point3f &p, const cv::Mat T4x4);
+    cv::Point3f transCoord(const cv::Point3f &p, const cv::Mat &R, const cv::Mat &t);
+
+    cv::Point3f transCoord(const cv::Point3f &p, const cv::Mat &T4x4);
+
+    double calcAngleBetweenTwoVectors(const cv::Mat &vec1, const cv::Mat &vec2);
 
 }
 

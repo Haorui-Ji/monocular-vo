@@ -29,7 +29,7 @@ public:
     Frame::Ptr NextFrame();
 
     /// get time stamp vector
-    vector<double> GetTimeStamp() {
+    vector<double> GetTimeStamp() const {
         return times_;
     }
 
@@ -38,11 +38,17 @@ public:
         return cameras_.at(camera_id);
     }
 
+    /// get ground truth poses
+    vector<vector<float>> GetGroundTruthPose() const {
+        return ground_truth_poses_;
+    }
+
 private:
     // Init
     string dataset_path_;
     vector<double> times_;
     vector<Camera::Ptr> cameras_;
+    vector<vector<float>> ground_truth_poses_;
 
     // Next frame
     int current_image_index_ = 0;

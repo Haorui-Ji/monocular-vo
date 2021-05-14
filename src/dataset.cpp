@@ -27,6 +27,7 @@ bool Dataset::Init() {
     while(time_stream >> t) {
         times_.push_back(t);
     }
+    time_stream.close();
 
     // read camera intrinsics and extrinsics
     ifstream fin(dataset_path_ + "/calib.txt");
@@ -51,12 +52,34 @@ bool Dataset::Init() {
         cv::Mat t = (cv::Mat_<double>(3, 1) <<
                 projection_data[3], projection_data[7], projection_data[11]);
         t = K.inv() * t;
-//        K = K * 0.5;
         Camera::Ptr new_camera(new Camera(K));
         cameras_.push_back(new_camera);
         LOG(INFO) << "Camera " << i << " extrinsics: " << t.t();
     }
     fin.close();
+
+    // read ground truth poses
+    string dataset_index = dataset_path_.substr(dataset_path_.length() - 2, 2);
+    ifstream gt_pose(dataset_path_ + "/" + dataset_index + ".txt");
+    if (!gt_pose) {
+        LOG(ERROR) << "cannot find " << dataset_path_ << "ground truth txt!";
+        return false;
+    }
+
+    string line;
+    while ( getline (gt_pose, line) ) {
+        char *dup = strdup(line.c_str());
+        char *token = strtok(dup, " ");
+        vector<float> v;
+        while(token != NULL) {
+            v.push_back(atof(token));
+            token = strtok(NULL, " ");
+        }
+        ground_truth_poses_.push_back(v);
+        free(dup);
+    }
+    gt_pose.close();
+
     current_image_index_ = 0;
     return true;
 }
@@ -79,14 +102,12 @@ Frame::Ptr Dataset::NextFrame() {
         return nullptr;
     }
 
-//    cv::Mat image_resized;
-//    cv::resize(image, image_resized, cv::Size(), 0.5, 0.5,
-//               cv::INTER_NEAREST);
-
     auto new_frame = Frame::CreateFrame();
     new_frame->rgb_img_ = image;
+    new_frame->camera_ = cameras_[2];
     current_image_index_++;
     return new_frame;
 }
+
 
 }  // namespace myslam
