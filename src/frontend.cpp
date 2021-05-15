@@ -134,12 +134,17 @@ bool Frontend::BuildInitMap()
 
     }
 
-    vector<cv::Point3f> p_world;
-    Triangulation(inlier_pts_in_ref_frame, inlier_pts_in_curr_frame, camera_, R, t, p_world);
+    vector<cv::Point3f> p_3d_ref, p_world;
+    Triangulation(inlier_pts_in_ref_frame, inlier_pts_in_curr_frame, camera_, R, t, p_3d_ref);
 
     vector<bool> feasibility = CheckGoodTriangulationResult(
             reference_frame_->Pose(), current_frame_->Pose(), camera_,
-            p_world, inlier_pts_in_ref_frame, inlier_pts_in_curr_frame);
+            p_3d_ref, inlier_pts_in_ref_frame, inlier_pts_in_curr_frame);
+
+    for (int i = 0; i < p_3d_ref.size(); i++) {
+        p_world.push_back(transCoord(p_3d_ref[i], reference_frame_->Pose().inv()));
+    }
+
 
     for (int i = 0; i < feasibility.size(); i++)
     {
@@ -394,7 +399,7 @@ int Frontend::EstimateCurrentPoseByPNP()
         double confidence = 0.999;
         cv::solvePnPRansac(pts_3d, pts_2d, camera_->K_, cv::Mat(), rvec, t,
                            useExtrinsicGuess,
-                           iterationsCount, reprojectionError, confidence, pnp_inliers_mask, cv::SOLVEPNP_EPNP);
+                           iterationsCount, reprojectionError, confidence, pnp_inliers_mask, cv::SOLVEPNP_ITERATIVE);
 
         num_inliers = pnp_inliers_mask.rows;
         for (int i = 0; i < num_inliers; i++)
@@ -409,6 +414,27 @@ int Frontend::EstimateCurrentPoseByPNP()
 
         // -- Update current camera pos
         current_frame_->SetPose(convertRt2T(R, t));
+
+
+//        ///////////////////// Visualize 2 ////////////////////////////////
+//        vector<cv::KeyPoint> v_keypoints_map_proj, v_keypoints_2d;
+//        for (int i = 0; i < current_frame_->features_.size(); i++)
+//        {
+//            auto current_feature = current_frame_->features_[i];
+//            if (current_feature->map_point_.lock()) {
+//                cv::Point3f p_world = current_feature->map_point_.lock()->pos_;
+//                cv::Point2f p_img_proj = current_frame_->camera_->world2pixel(p_world, current_frame_->Pose());
+//                cv::Point2f p_img = current_feature->position_.pt;
+//
+//                cv::circle(current_frame_->rgb_img_, p_img_proj, 3, cv::Scalar(0, 0, 255), cv::FILLED);
+//                cv::circle(current_frame_->rgb_img_, p_img, 3, cv::Scalar(0, 255, 0), cv::FILLED);
+//            }
+//        }
+//
+//        cv::imshow ( "current", current_frame_->rgb_img_ );
+//        cv::waitKey(0);
+//        //////////////////////////////////////////////////////////////
+
     }
 
     return num_inliers;
@@ -504,6 +530,8 @@ int Frontend::EstimateCurrentPoseByPNP()
 
 int Frontend::TrackLastFrame()
 {
+
+    // Descriptor tracking
     MatchFeatures(
             last_frame_->features_, current_frame_->features_, current_frame_->matches_with_last_frame_);
 
@@ -521,6 +549,7 @@ int Frontend::TrackLastFrame()
     LOG(INFO) << "There are " << count  << " inlier features in last frame associate with map points";
     //////////////////////////////////
 
+    // Motion tracking
     for (int i = 0; i < current_frame_->matches_with_last_frame_.size(); ++i) {
         cv::DMatch match = current_frame_->matches_with_last_frame_[i];
 
@@ -529,6 +558,7 @@ int Frontend::TrackLastFrame()
 
         if (last_feature->map_point_.lock() && (last_feature->is_inlier_ == true ||
                 last_feature->associate_new_map_point_ == true)) {
+//        if (last_feature->map_point_.lock()) {
             current_feature->map_point_ = last_feature->map_point_.lock();
             num_good_pts++;
         }

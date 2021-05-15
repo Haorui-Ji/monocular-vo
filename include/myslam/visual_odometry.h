@@ -43,8 +43,14 @@ public:
      */
     bool Step();
 
+    /// 获取数据集信息
+    Dataset::Ptr GetDataset() const { return dataset_; }
+
     /// 获取前端状态
     FrontendStatus GetFrontendStatus() const { return frontend_->GetStatus(); }
+
+    /// 获取每一帧的位姿结果
+    vector<cv::Mat> GetCamPoseHistory() const { return cam_pose_history_; }
 
     /// 将相机位姿写入文本文档
     void WritePoseToFile(const string filename);

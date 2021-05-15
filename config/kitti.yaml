@@ -1,8 +1,8 @@
 %YAML:1.0
 # dataset_dir
-dataset_dir: ./data/kitti/odometry/dataset/sequences/05
+dataset_dir: ./data/kitti/odometry/dataset/sequences/00
 
-save_predicted_traj_to: ./result/cam_traj_05.txt
+save_predicted_traj_to: ./result/cam_traj_00.txt
 
 # VO Parameters
 

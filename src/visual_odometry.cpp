@@ -67,44 +67,44 @@ bool VisualOdometry::Step() {
 
     cam_pose_history_.push_back(new_frame->Pose().clone().inv());
 
-//    /////////////////// Visualize 1 ///////////////////////////////
-//    cv::Mat traj = Mat::zeros(600, 600, CV_8UC3);
-//    cv::Mat R, t_vec;
-//    getRtFromT(new_frame->Pose().inv(), R, t_vec);
-//    vector<vector<float>> poses = dataset_->GetGroundTruthPose();
-//    string text  = "Red color: estimated trajectory";
-//    string text2 = "Blue color: Groundtruth trajectory";
-//
-//    t_vec.convertTo(t_vec, CV_32F);
-//    cv::Point2f center = cv::Point2f(int(t_vec.at<float>(0)) + 300, int(t_vec.at<float>(2)) + 100);
-//    cv::Point2f t_center = cv::Point2f(int(poses[new_frame->id_][3]) + 300, int(poses[new_frame->id_][11]) + 100);
-//    cv::circle(traj, center, 1, cv::Scalar(0, 0, 255), 2);
-//    cv::circle(traj, t_center, 1, cv::Scalar(255, 0, 0), 2);
-//    cv::rectangle(traj, cv::Point2f(10, 30), cv::Point2f(550, 50),  cv::Scalar(0,0,0), cv::FILLED);
-//    cv::putText(traj, text, cv::Point2f(10, 50), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(0, 0, 255), 1, 5);
-//    cv::putText(traj, text2, cv::Point2f(10, 70), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255, 0, 0), 1, 5);
-//    cv::imshow( "Trajectory", traj);
-//    cv::waitKey(0);
-//    //////////////////////////////////////////////////////////////
+    /////////////////// Visualize 1 ///////////////////////////////
+    cv::Mat traj = Mat::zeros(600, 600, CV_8UC3);
+    cv::Mat R, t_vec;
+    getRtFromT(new_frame->Pose().inv(), R, t_vec);
+    vector<vector<float>> poses = dataset_->GetGroundTruthPose();
+    string text  = "Red color: estimated trajectory";
+    string text2 = "Blue color: Groundtruth trajectory";
 
-    ///////////////////// Visualize 2 ////////////////////////////////
-    vector<cv::KeyPoint> v_keypoints_map_proj, v_keypoints_2d;
-    for (int i = 0; i < new_frame->features_.size(); i++)
-    {
-        auto current_feature = new_frame->features_[i];
-        if (current_feature->map_point_.lock()) {
-            cv::Point3f p_world = current_feature->map_point_.lock()->pos_;
-            cv::Point2f p_img_proj = new_frame->camera_->world2pixel(p_world, new_frame->Pose());
-            cv::Point2f p_img = current_feature->position_.pt;
-
-            cv::circle(new_frame->rgb_img_, p_img_proj, 3, cv::Scalar(0, 0, 255), cv::FILLED);
-            cv::circle(new_frame->rgb_img_, p_img, 3, cv::Scalar(0, 255, 0), cv::FILLED);
-        }
-    }
-
-    cv::imshow ( "current", new_frame->rgb_img_ );
+    t_vec.convertTo(t_vec, CV_32F);
+    cv::Point2f center = cv::Point2f(int(t_vec.at<float>(0)) + 300, int(t_vec.at<float>(2)) + 100);
+    cv::Point2f t_center = cv::Point2f(int(poses[new_frame->id_][3]) + 300, int(poses[new_frame->id_][11]) + 100);
+    cv::circle(traj, center, 1, cv::Scalar(0, 0, 255), 2);
+    cv::circle(traj, t_center, 1, cv::Scalar(255, 0, 0), 2);
+    cv::rectangle(traj, cv::Point2f(10, 30), cv::Point2f(550, 50),  cv::Scalar(0,0,0), cv::FILLED);
+    cv::putText(traj, text, cv::Point2f(10, 50), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(0, 0, 255), 1, 5);
+    cv::putText(traj, text2, cv::Point2f(10, 70), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255, 0, 0), 1, 5);
+    cv::imshow( "Trajectory", traj);
     cv::waitKey(0);
     //////////////////////////////////////////////////////////////
+
+//    ///////////////////// Visualize 2 ////////////////////////////////
+//    vector<cv::KeyPoint> v_keypoints_map_proj, v_keypoints_2d;
+//    for (int i = 0; i < new_frame->features_.size(); i++)
+//    {
+//        auto current_feature = new_frame->features_[i];
+//        if (current_feature->map_point_.lock()) {
+//            cv::Point3f p_world = current_feature->map_point_.lock()->pos_;
+//            cv::Point2f p_img_proj = new_frame->camera_->world2pixel(p_world, new_frame->Pose());
+//            cv::Point2f p_img = current_feature->position_.pt;
+//
+//            cv::circle(new_frame->rgb_img_, p_img_proj, 3, cv::Scalar(0, 0, 255), cv::FILLED);
+//            cv::circle(new_frame->rgb_img_, p_img, 3, cv::Scalar(0, 255, 0), cv::FILLED);
+//        }
+//    }
+//
+//    cv::imshow ( "current", new_frame->rgb_img_ );
+//    cv::waitKey(0);
+//    //////////////////////////////////////////////////////////////
 
     return success;
 }
