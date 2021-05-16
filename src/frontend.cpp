@@ -51,20 +51,33 @@ bool Frontend::AddFrame(Frame::Ptr frame) {
     }
 
     if (last_frame_ != nullptr) {
-        cv::Mat relative_motion = current_frame_->Pose() * last_frame_->Pose().inv();
         cv::Mat t = getPosFromT(current_frame_->Pose());
-        cv::Mat t_relative = getPosFromT(relative_motion);
+        cv::Mat t_relative = getPosFromT(relative_motion_);
         cout << "\nCamera motion:" << endl;
         cout << "Motion w.r.t World:\n " << t << endl;
         cout << "Motion w.r.t last frame:\n " << t_relative << endl;
     }
 
-    last_frame_ = current_frame_;
+//    ///////////////////// Visualize 2 ////////////////////////////////
+//    vector<cv::KeyPoint> v_keypoints_map_proj, v_keypoints_2d;
+//    for (int i = 0; i < current_frame_->features_.size(); i++)
+//    {
+//        auto current_feature = current_frame_->features_[i];
+//        if (current_feature->map_point_.lock()) {
+//            cv::Point3f p_world = current_feature->map_point_.lock()->pos_;
+//            cv::Point2f p_img_proj = current_frame_->camera_->world2pixel(p_world, current_frame_->Pose());
+//            cv::Point2f p_img = current_feature->position_.pt;
 //
-//    cout << map_->GetAllMapPoints().size() << endl;
-//    for (auto &mp: map_->GetAllMapPoints()) {
-//        cout << mp.second->pos_ << endl;
+//            cv::circle(current_frame_->rgb_img_, p_img_proj, 3, cv::Scalar(0, 0, 255), cv::FILLED);
+//            cv::circle(current_frame_->rgb_img_, p_img, 3, cv::Scalar(0, 255, 0), cv::FILLED);
+//        }
 //    }
+//
+//    cv::imshow ( "current", current_frame_->rgb_img_ );
+//    cv::waitKey(0);
+//    //////////////////////////////////////////////////////////////
+
+    last_frame_ = current_frame_;
 
     return true;
 }
@@ -183,10 +196,10 @@ bool Frontend::Track()
 
     LOG(INFO) << "Tracking inliers: " << tracking_inliers_;
 
-    if (tracking_inliers_ > num_features_tracking_) {
+    if (tracking_inliers_ >= num_features_tracking_) {
         // tracking good
         status_ = FrontendStatus::TRACKING_GOOD;
-    } else if (tracking_inliers_ > num_features_tracking_bad_) {
+    } else if (tracking_inliers_ >= num_features_tracking_bad_) {
         // tracking bad
         status_ = FrontendStatus::TRACKING_BAD;
     } else {
@@ -226,7 +239,6 @@ bool Frontend::InsertKeyframe()
 
     return true;
 }
-
 
 bool Frontend::CheckConditionForAddKeyFrame()
 {
@@ -388,52 +400,45 @@ int Frontend::EstimateCurrentPoseByPNP()
     constexpr int kMinPtsForPnP = 5;
 
     cv::Mat pnp_inliers_mask; // type = 32SC1, size = 999x1
-    cv::Mat rvec, t;
+    cv::Mat R, rvec, tvec;
+    getRtFromT(current_frame_->Pose(), R, tvec);
+    cv::Rodrigues(R, rvec);
 
     bool is_pnp_good = num_matches >= kMinPtsForPnP;
     int num_inliers = 0;
     if (is_pnp_good) {
-        bool useExtrinsicGuess = false;
+        bool useExtrinsicGuess = false;      // provide initial guess
         int iterationsCount = 100;
         float reprojectionError = 2.0;
         double confidence = 0.999;
-        cv::solvePnPRansac(pts_3d, pts_2d, camera_->K_, cv::Mat(), rvec, t,
+        cv::solvePnPRansac(pts_3d, pts_2d, camera_->K_, cv::Mat(), rvec, tvec,
                            useExtrinsicGuess,
                            iterationsCount, reprojectionError, confidence, pnp_inliers_mask, cv::SOLVEPNP_ITERATIVE);
 
-        num_inliers = pnp_inliers_mask.rows;
-        for (int i = 0; i < num_inliers; i++)
+        cv::Rodrigues(rvec, R); // angle-axis rotation to 3x3 rotation matrix
+        cv::Mat pose = convertRt2T(R, tvec);
+
+        for (int i = 0; i < pnp_inliers_mask.rows; i++)
         {
             int good_idx = pnp_inliers_mask.at<int>(i, 0);
 
-            features[good_idx]->is_inlier_ = true;
+            auto mappoint = features[good_idx]->map_point_.lock();
+            auto p_proj = camera_->world2pixel(mappoint->pos_, pose);
+            auto p_img = features[good_idx]->position_.pt;
+
+            float reprojectionError = (p_proj.x - p_img.x) * (p_proj.x - p_img.x) \
+                                        + (p_proj.y - p_img.y) * (p_proj.y - p_img.y);
+
+            if (reprojectionError <= 4 )
+            {
+                features[good_idx]->is_inlier_ = true;
+                num_inliers++;
+            }
         }
 
-        cv::Mat R;
-        cv::Rodrigues(rvec, R); // angle-axis rotation to 3x3 rotation matrix
-
-        // -- Update current camera pos
-        current_frame_->SetPose(convertRt2T(R, t));
-
-
-//        ///////////////////// Visualize 2 ////////////////////////////////
-//        vector<cv::KeyPoint> v_keypoints_map_proj, v_keypoints_2d;
-//        for (int i = 0; i < current_frame_->features_.size(); i++)
-//        {
-//            auto current_feature = current_frame_->features_[i];
-//            if (current_feature->map_point_.lock()) {
-//                cv::Point3f p_world = current_feature->map_point_.lock()->pos_;
-//                cv::Point2f p_img_proj = current_frame_->camera_->world2pixel(p_world, current_frame_->Pose());
-//                cv::Point2f p_img = current_feature->position_.pt;
-//
-//                cv::circle(current_frame_->rgb_img_, p_img_proj, 3, cv::Scalar(0, 0, 255), cv::FILLED);
-//                cv::circle(current_frame_->rgb_img_, p_img, 3, cv::Scalar(0, 255, 0), cv::FILLED);
-//            }
-//        }
-//
-//        cv::imshow ( "current", current_frame_->rgb_img_ );
-//        cv::waitKey(0);
-//        //////////////////////////////////////////////////////////////
+        if (num_inliers > num_features_tracking_bad_) {
+            current_frame_->SetPose(pose);
+        }
 
     }
 
@@ -531,25 +536,12 @@ int Frontend::EstimateCurrentPoseByPNP()
 int Frontend::TrackLastFrame()
 {
 
+    int num_good_pts = 0;
+
     // Descriptor tracking
     MatchFeatures(
             last_frame_->features_, current_frame_->features_, current_frame_->matches_with_last_frame_);
 
-    int num_good_pts = 0;
-
-    ///////////////////////////////////
-    int count = 0;
-    for (int i = 0; i < last_frame_->features_.size(); i++) {
-        auto last_feature = last_frame_->features_[i];
-        if (last_feature->map_point_.lock() && (last_feature->is_inlier_ == true ||
-                last_feature->associate_new_map_point_ == true)) {
-            count ++;
-        }
-    }
-    LOG(INFO) << "There are " << count  << " inlier features in last frame associate with map points";
-    //////////////////////////////////
-
-    // Motion tracking
     for (int i = 0; i < current_frame_->matches_with_last_frame_.size(); ++i) {
         cv::DMatch match = current_frame_->matches_with_last_frame_[i];
 
@@ -558,7 +550,6 @@ int Frontend::TrackLastFrame()
 
         if (last_feature->map_point_.lock() && (last_feature->is_inlier_ == true ||
                 last_feature->associate_new_map_point_ == true)) {
-//        if (last_feature->map_point_.lock()) {
             current_feature->map_point_ = last_feature->map_point_.lock();
             num_good_pts++;
         }

@@ -55,6 +55,8 @@ public:
     /// 将相机位姿写入文本文档
     void WritePoseToFile(const string filename);
 
+    cv::Mat traj_ = Mat::zeros(1000, 1000, CV_8UC3);
+
 private:
     bool inited_ = false;
     std::string config_file_path_;

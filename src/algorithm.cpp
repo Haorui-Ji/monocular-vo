@@ -87,24 +87,69 @@ void MatchFeatures(
         features_2[j]->descriptor_.copyTo(descriptors_2.row(j));
     }
 
-    vector<cv::DMatch> all_matches_12, all_matches_21;
+    double match_ratio = Config::Get<double>("match_ratio");
+    cv::FlannBasedMatcher matcher_flann(new cv::flann::LshIndexParams(5, 10, 2));
+    vector<cv::DMatch> all_matches;
 
-    std::pair<vector<int>, vector<double>> best_matches_12 = MatchFeaturesHelper(descriptors_1, descriptors_2,
-                                                                                 all_matches_12);
-    std::pair<vector<int>, vector<double>> best_matches_21 = MatchFeaturesHelper(descriptors_2, descriptors_1,
-                                                                                 all_matches_21);
+    matcher_flann.match(descriptors_1, descriptors_2, all_matches);
 
-    for (int idx1 = 0; idx1 < (int) best_matches_12.first.size(); idx1++) {
-        int idx2 = best_matches_12.first[idx1];
-        if (idx2 != -1) // it means we can find corresponding matches in feature_2
-        {
-            if (best_matches_21.first[idx2] == idx1) {
-                cv::DMatch match = cv::DMatch(idx1, idx2, best_matches_12.second[idx1]);
-                matches.push_back(match);
-            }
+    double min_dist = 10000, max_dist = 0;
+
+    for (int i = 0; i < all_matches.size(); i++) {
+        double dist = all_matches[i].distance;
+        if (dist < min_dist) min_dist = dist;
+        if (dist > max_dist) max_dist = dist;
+    }
+
+    // Select good matches and push to the result vector.
+    for (cv::DMatch &m : all_matches) {
+        if (m.distance <= max(min_dist * match_ratio, 50.0)) {
+            matches.push_back(m);
         }
     }
 }
+
+//void MatchFeatures(
+//        const vector<std::shared_ptr<Feature>> &features_1,
+//        const vector<std::shared_ptr<Feature>> &features_2,
+//        vector<cv::DMatch> &matches)
+//{
+//    int rows_1 = features_1.size();
+//    int cols_1 = features_1[0]->descriptor_.cols;
+//
+//    int rows_2 = features_2.size();
+//    int cols_2 = features_2[0]->descriptor_.cols;
+//
+//    cv::Mat descriptors_1(rows_1, cols_1, CV_8U);
+//    cv::Mat descriptors_2(rows_2, cols_2, CV_8U);
+//
+//    for (int i = 0; i < features_1.size(); i++ )
+//    {
+//        features_1[i]->descriptor_.copyTo(descriptors_1.row(i));
+//    }
+//    for (int j = 0; j < features_2.size(); j++ )
+//    {
+//        features_2[j]->descriptor_.copyTo(descriptors_2.row(j));
+//    }
+//
+//    vector<cv::DMatch> all_matches_12, all_matches_21;
+//
+//    std::pair<vector<int>, vector<double>> best_matches_12 = MatchFeaturesHelper(descriptors_1, descriptors_2,
+//                                                                                 all_matches_12);
+//    std::pair<vector<int>, vector<double>> best_matches_21 = MatchFeaturesHelper(descriptors_2, descriptors_1,
+//                                                                                 all_matches_21);
+//
+//    for (int idx1 = 0; idx1 < (int) best_matches_12.first.size(); idx1++) {
+//        int idx2 = best_matches_12.first[idx1];
+//        if (idx2 != -1) // it means we can find corresponding matches in feature_2
+//        {
+//            if (best_matches_21.first[idx2] == idx1) {
+//                cv::DMatch match = cv::DMatch(idx1, idx2, best_matches_12.second[idx1]);
+//                matches.push_back(match);
+//            }
+//        }
+//    }
+//}
 
 void Triangulation(
         const vector<cv::Point2f> &inlier_pts_in_img1,

@@ -60,7 +60,10 @@ namespace myslam {
 
     cv::Mat getPosFromT(const cv::Mat &T)
     {
-        return T(cv::Rect(3, 0, 1, 3)).clone();
+        return (cv::Mat_<double>(3, 1) <<
+                       T.at<double>(0, 3),
+                       T.at<double>(1, 3),
+                       T.at<double>(2, 3));
     }
 
     cv::Point3f transCoord(const cv::Point3f &p, const cv::Mat &R, const cv::Mat &t)

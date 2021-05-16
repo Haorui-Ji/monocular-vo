@@ -23,9 +23,9 @@ int main(int argc, char** argv) {
 
     vo->Run();
 
-    // Save camera trajectory
-    const string save_predicted_traj_to = Config::Get<string>("save_predicted_traj_to");
-    vo->WritePoseToFile(save_predicted_traj_to);
+//    // Save camera trajectory
+//    const string save_predicted_traj_to = Config::Get<string>("save_predicted_traj_to");
+//    vo->WritePoseToFile(save_predicted_traj_to);
 
 //    /////////////////// Visualize whole trajectory ///////////////////////////////
 //    cv::Mat traj = Mat::zeros(600, 600, CV_8UC3);
