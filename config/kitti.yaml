@@ -8,7 +8,7 @@ save_predicted_traj_to: ./result/cam_traj_00.txt
 
 # ------------------- Feature Matching -------------------
 # ORB settings
-number_of_features: 1000
+number_of_features: 1200
 scale_factor: 1.2
 level_pyramid: 4
 score_threshold: 20
@@ -25,8 +25,6 @@ initialization_sigma: 1.0
 
 # ------------------- Initialization -------------------
 min_inlier_matches: 15
-min_pixel_dist: 50
-min_median_triangulation_angle: 2.0
 
 # ------------------- Tracking -------------------
 min_dist_between_two_keyframes: 1.0

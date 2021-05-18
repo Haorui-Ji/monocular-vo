@@ -15,7 +15,6 @@
 namespace myslam {
 
 class Backend;
-class Viewer;
 
 enum class FrontendStatus { BLANK, INITING, TRACKING_GOOD, TRACKING_BAD, LOST };
 
@@ -114,6 +113,8 @@ private:
     void SetObservationsForKeyFrame();
 
     bool IsGoodToInit();
+
+    void LocalBundleAdjustment();
 
     // data
     FrontendStatus status_ = FrontendStatus::BLANK;

@@ -13,8 +13,8 @@
 
 namespace myslam {
 
-Frontend::Frontend() {
-
+Frontend::Frontend()
+{
     static const int num_keypoints = Config::Get<int>("number_of_features");
     static const float scale_factor = Config::Get<float>("scale_factor");
     static const int level_pyramid = Config::Get<int>("level_pyramid");
@@ -25,7 +25,8 @@ Frontend::Frontend() {
                            31, 0, 2, cv::ORB::HARRIS_SCORE, 31, score_threshold);
 }
 
-bool Frontend::AddFrame(Frame::Ptr frame) {
+bool Frontend::AddFrame(Frame::Ptr frame)
+{
     current_frame_ = frame;
 
     DetectFeatures();
@@ -45,44 +46,42 @@ bool Frontend::AddFrame(Frame::Ptr frame) {
         case FrontendStatus::TRACKING_BAD:
             Track();
             break;
-        case FrontendStatus::LOST:
-            Reset();
-            break;
     }
 
     if (last_frame_ != nullptr) {
         cv::Mat t = getPosFromT(current_frame_->Pose());
         cv::Mat t_relative = getPosFromT(relative_motion_);
-        cout << "\nCamera motion:" << endl;
-        cout << "Motion w.r.t World:\n " << t << endl;
-        cout << "Motion w.r.t last frame:\n " << t_relative << endl;
+        LOG(INFO) << "\nCamera motion:" << endl;
+        LOG(INFO) << "Motion w.r.t World:\n " << current_frame_->Pose().inv() << endl;
+//        LOG(INFO) << "Motion w.r.t last frame:\n " << t_relative << endl;
     }
 
-//    ///////////////////// Visualize 2 ////////////////////////////////
-//    vector<cv::KeyPoint> v_keypoints_map_proj, v_keypoints_2d;
-//    for (int i = 0; i < current_frame_->features_.size(); i++)
-//    {
-//        auto current_feature = current_frame_->features_[i];
-//        if (current_feature->map_point_.lock()) {
-//            cv::Point3f p_world = current_feature->map_point_.lock()->pos_;
-//            cv::Point2f p_img_proj = current_frame_->camera_->world2pixel(p_world, current_frame_->Pose());
-//            cv::Point2f p_img = current_feature->position_.pt;
-//
-//            cv::circle(current_frame_->rgb_img_, p_img_proj, 3, cv::Scalar(0, 0, 255), cv::FILLED);
-//            cv::circle(current_frame_->rgb_img_, p_img, 3, cv::Scalar(0, 255, 0), cv::FILLED);
-//        }
-//    }
-//
-//    cv::imshow ( "current", current_frame_->rgb_img_ );
-//    cv::waitKey(0);
-//    //////////////////////////////////////////////////////////////
+    ///////////////////// Visualize 2 ////////////////////////////////
+    vector<cv::KeyPoint> v_keypoints_map_proj, v_keypoints_2d;
+    for (int i = 0; i < current_frame_->features_.size(); i++)
+    {
+        auto current_feature = current_frame_->features_[i];
+        if (current_feature->map_point_.lock()) {
+            cv::Point3f p_world = current_feature->map_point_.lock()->pos_;
+            cv::Point2f p_img_proj = current_frame_->camera_->world2pixel(p_world, current_frame_->Pose());
+            cv::Point2f p_img = current_feature->position_.pt;
+
+            cv::circle(current_frame_->rgb_img_, p_img_proj, 3, cv::Scalar(0, 0, 255), cv::FILLED);
+            cv::circle(current_frame_->rgb_img_, p_img, 3, cv::Scalar(0, 255, 0), cv::FILLED);
+        }
+    }
+
+    cv::imshow ( "current", current_frame_->rgb_img_ );
+    cv::waitKey(0);
+    //////////////////////////////////////////////////////////////
 
     last_frame_ = current_frame_;
 
     return true;
 }
 
-bool Frontend::MonoInit() {
+bool Frontend::MonoInit()
+{
 
     MatchFeatures(
             reference_frame_->features_, current_frame_->features_, current_frame_->matches_with_ref_frame_);
@@ -189,9 +188,8 @@ bool Frontend::BuildInitMap()
 
 bool Frontend::Track()
 {
-    current_frame_->SetPose(relative_motion_ * last_frame_->Pose());
-
     TrackLastFrame();
+
     tracking_inliers_ = EstimateCurrentPoseByPNP();
 
     LOG(INFO) << "Tracking inliers: " << tracking_inliers_;
@@ -207,7 +205,12 @@ bool Frontend::Track()
         status_ = FrontendStatus::LOST;
     }
 
-    InsertKeyframe();
+    if (status_ == FrontendStatus::TRACKING_GOOD || status_ == FrontendStatus::TRACKING_BAD) {
+        InsertKeyframe();
+    } else {
+        Reset();
+    }
+
     relative_motion_ = current_frame_->Pose() * last_frame_->Pose().inv();
 
     return true;
@@ -293,7 +296,7 @@ int Frontend::TriangulateNewPoints()
     {
         cv::DMatch match = current_frame_->matches_with_ref_frame_[i];
         if (reference_frame_->features_[match.queryIdx]->map_point_.expired() &&
-                current_frame_->features_[match.trainIdx]->map_point_.expired())
+            current_frame_->features_[match.trainIdx]->map_point_.expired())
         {
             // 如果当前帧和参考帧匹配上的特征点均未关联地图点,则进行三角化
             inlier_features_ref.push_back(reference_frame_->features_[match.queryIdx]);
@@ -371,8 +374,8 @@ int Frontend::EstimateMotionByEpipolarGeometry()
     cv::Mat R, t;
     recoverPose(essential_matrix, pts_in_img1, pts_in_img2, camera_->K_, R, t, inliers_mask);
 
-    // Normalize t
-    t = t / cv::norm(t);
+//    // Normalize t
+//    t = t / cv::norm(t);
 
     relative_motion_ = convertRt2T(R, t);
     current_frame_->SetPose(relative_motion_ * reference_frame_->Pose());
@@ -382,6 +385,7 @@ int Frontend::EstimateMotionByEpipolarGeometry()
 
 int Frontend::EstimateCurrentPoseByPNP()
 {
+
     vector<cv::Point3f> pts_3d;
     vector<cv::Point2f> pts_2d;
     vector<std::shared_ptr<Feature>> features;
@@ -401,8 +405,6 @@ int Frontend::EstimateCurrentPoseByPNP()
 
     cv::Mat pnp_inliers_mask; // type = 32SC1, size = 999x1
     cv::Mat R, rvec, tvec;
-    getRtFromT(current_frame_->Pose(), R, tvec);
-    cv::Rodrigues(R, rvec);
 
     bool is_pnp_good = num_matches >= kMinPtsForPnP;
     int num_inliers = 0;
@@ -427,7 +429,7 @@ int Frontend::EstimateCurrentPoseByPNP()
             auto p_img = features[good_idx]->position_.pt;
 
             float reprojectionError = (p_proj.x - p_img.x) * (p_proj.x - p_img.x) \
-                                        + (p_proj.y - p_img.y) * (p_proj.y - p_img.y);
+                                    + (p_proj.y - p_img.y) * (p_proj.y - p_img.y);
 
             if (reprojectionError <= 4 )
             {
@@ -445,7 +447,7 @@ int Frontend::EstimateCurrentPoseByPNP()
     return num_inliers;
 }
 
-//int Frontend::EstimateCurrentPoseByG2O() {
+//int Frontend::LocalBundleAdjustment() {
 //    // setup g2o
 //    typedef g2o::BlockSolver_6_3 BlockSolverType;
 //    typedef g2o::LinearSolverDense<BlockSolverType::PoseMatrixType>
@@ -535,7 +537,6 @@ int Frontend::EstimateCurrentPoseByPNP()
 
 int Frontend::TrackLastFrame()
 {
-
     int num_good_pts = 0;
 
     // Descriptor tracking
@@ -548,8 +549,8 @@ int Frontend::TrackLastFrame()
         auto current_feature = current_frame_->features_[match.trainIdx];
         auto last_feature = last_frame_->features_[match.queryIdx];
 
-        if (last_feature->map_point_.lock() && (last_feature->is_inlier_ == true ||
-                last_feature->associate_new_map_point_ == true)) {
+        if (last_feature->map_point_.lock() && (last_feature->is_inlier_ || last_feature->associate_new_map_point_))
+        {
             current_feature->map_point_ = last_feature->map_point_.lock();
             num_good_pts++;
         }
@@ -558,73 +559,6 @@ int Frontend::TrackLastFrame()
     LOG(INFO) << "Find " << num_good_pts << " good 2D matches with last frame";
     return num_good_pts;
 }
-
-//int Frontend::TrackLastFrame()
-//{
-//    // use LK flow to estimate points in the right image
-//    vector<cv::Point2f> kpts_last, kpts_current;
-//    vector<std::shared_ptr<Feature>> last_frame_feature_inliers;
-//    LOG(INFO) << last_frame_->features_.size();
-//    for (auto &kp : last_frame_->features_) {
-//        if (kp->map_point_.lock()) {
-//            // use project point
-//            auto mp = kp->map_point_.lock();
-//            last_frame_feature_inliers.push_back(kp);
-//            kpts_last.push_back(kp->position_.pt);
-//        }
-//    }
-//    LOG(INFO) << last_frame_feature_inliers.size();
-//
-//    std::vector<uchar> status;
-//    Mat error;
-//    cv::calcOpticalFlowPyrLK(
-//            last_frame_->rgb_img_, current_frame_->rgb_img_,
-//            kpts_last, kpts_current, status, error);
-//
-//    //, cv::Size(11, 11), 3,
-//    //            cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30,0.01),
-//    //            cv::OPTFLOW_USE_INITIAL_FLOW
-//
-//    // need to compute descriptors for initialize features
-//    vector<cv::KeyPoint> keypoints;
-//    vector<int> indices;
-//    cv::Mat descriptors;
-//    int count = 0;
-//    for (int i = 0; i < status.size(); i++) {
-//        if (status[i]) {
-//            cv::KeyPoint kp(kpts_current[i], 3);
-//            keypoints.push_back(kp);
-//            indices.push_back(i);
-//            count++;
-//        }
-//    }
-//
-//    orb_->compute(current_frame_->rgb_img_, keypoints, descriptors);
-//    cout << keypoints.size() << endl << descriptors.rows << endl;
-//    for (int i = 0; i < keypoints.size(); i++) {
-//        Feature::Ptr feature(new Feature(current_frame_, keypoints[i], descriptors.row(i)));
-//        feature->map_point_ = last_frame_feature_inliers[indices[i]]->map_point_;
-//        current_frame_->features_.push_back(feature);
-//    }
-//
-//    int num_good_pts = keypoints.size();
-//
-//    int num_good_pts = 0;
-//    for (int i = 0; i < status.size(); i++) {
-//        if (status[i]) {
-//            cv::KeyPoint kp(kpts_current[i], 7);
-//            Feature::Ptr feature(new Feature(current_frame_, kp));
-//            feature->map_point_ = last_frame_feature_inliers[i]->map_point_;
-//            current_frame_->features_.push_back(feature);
-//            num_good_pts++;
-//        }
-//    }
-//
-//    LOG(INFO) << "Find " << num_good_pts << " matches in last image.";
-//
-//    return num_good_pts;
-//}
-
 
 bool Frontend::Reset()
 {
@@ -657,4 +591,3 @@ int Frontend::DetectFeatures() {
 
 
 }  // namespace myslam
-

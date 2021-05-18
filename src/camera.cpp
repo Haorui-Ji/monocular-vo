@@ -13,9 +13,9 @@ cv::Point3f Camera::world2camera(const cv::Point3f &p_w, const cv::Mat &T_c_w)
 {
     cv::Mat p_w_h = (cv::Mat_<double>(4, 1) << p_w.x, p_w.y, p_w.z, 1);
     cv::Mat p_c_h = T_c_w * p_w_h;
-    return cv::Point3f(p_c_h.at<double>(0, 0),
-                       p_c_h.at<double>(1, 0),
-                       p_c_h.at<double>(2, 0));
+    return cv::Point3f(p_c_h.at<double>(0, 0) / p_c_h.at<double>(3, 0),
+                       p_c_h.at<double>(1, 0) / p_c_h.at<double>(3, 0),
+                       p_c_h.at<double>(2, 0) / p_c_h.at<double>(3, 0));
 }
 
 cv::Point3f Camera::camera2world(const cv::Point3f &p_c, const cv::Mat &T_c_w)
@@ -29,9 +29,9 @@ cv::Point3f Camera::camera2world(const cv::Point3f &p_c, const cv::Mat &T_c_w)
 
     cv::Mat p_c_h = (cv::Mat_<double>(4, 1) << p_c.x, p_c.y, p_c.z, 1);
     cv::Mat p_w_h = T_c_w_4x4.inv() * p_c_h;
-    return cv::Point3f(p_w_h.at<double>(0, 0),
-                       p_w_h.at<double>(1, 0),
-                       p_w_h.at<double>(2, 0));
+    return cv::Point3f(p_w_h.at<double>(0, 0) / p_w_h.at<double>(3, 0),
+                       p_w_h.at<double>(1, 0) / p_w_h.at<double>(3, 0),
+                       p_w_h.at<double>(2, 0) / p_w_h.at<double>(3, 0));
 }
 
 cv::Point3f Camera::pixel2camera(const cv::Point2f &p, double depth)
