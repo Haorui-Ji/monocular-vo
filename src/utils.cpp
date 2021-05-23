@@ -77,9 +77,10 @@ namespace myslam {
     {
         cv::Mat p1 = (cv::Mat_<double>(4, 1) << p.x, p.y, p.z, 1);
         cv::Mat p2 = T4x4 * p1;
-        return cv::Point3f(p2.at<double>(0, 0) / p2.at<double>(3, 0),
-                           p2.at<double>(1, 0) / p2.at<double>(3, 0),
-                           p2.at<double>(2, 0) / p2.at<double>(3, 0));
+        p2 /= p2.at<double>(3, 0);
+        return cv::Point3f(p2.at<double>(0, 0),
+                           p2.at<double>(1, 0),
+                           p2.at<double>(2, 0));
     }
 
     double calcAngleBetweenTwoVectors(const cv::Mat &vec1, const cv::Mat &vec2)

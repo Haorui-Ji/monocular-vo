@@ -24,11 +24,13 @@ find_package(Pangolin REQUIRED)
 include_directories(${Pangolin_INCLUDE_DIRS})
 
 # G2O
-
-LIST( APPEND CMAKE_MODULE_PATH /home/jihaorui/NewDisk/github/g2o/cmake_modules )
-SET( G2O_ROOT /home/jihaorui/NewDisk/github/g2o)
+list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
+SET( G2O_ROOT /usr/local/include/g2o )
 find_package(G2O REQUIRED)
 include_directories(${G2O_INCLUDE_DIRS})
+
+find_package( CSparse )
+include_directories(${CSPARSE_INCLUDE_DIR})
 
 # glog
 find_package(Glog REQUIRED)

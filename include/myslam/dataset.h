@@ -43,6 +43,9 @@ public:
         return ground_truth_poses_;
     }
 
+    /// get absolute scale
+    double GetAbsoluteScale(int frame_id);
+
 private:
     // Init
     string dataset_path_;

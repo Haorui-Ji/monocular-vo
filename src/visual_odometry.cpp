@@ -86,25 +86,6 @@ bool VisualOdometry::Step() {
     cv::waitKey(0);
     //////////////////////////////////////////////////////////////
 
-//    ///////////////////// Visualize 2 ////////////////////////////////
-//    vector<cv::KeyPoint> v_keypoints_map_proj, v_keypoints_2d;
-//    for (int i = 0; i < new_frame->features_.size(); i++)
-//    {
-//        auto current_feature = new_frame->features_[i];
-//        if (current_feature->map_point_.lock()) {
-//            cv::Point3f p_world = current_feature->map_point_.lock()->pos_;
-//            cv::Point2f p_img_proj = new_frame->camera_->world2pixel(p_world, new_frame->Pose());
-//            cv::Point2f p_img = current_feature->position_.pt;
-//
-//            cv::circle(new_frame->rgb_img_, p_img_proj, 3, cv::Scalar(0, 0, 255), cv::FILLED);
-//            cv::circle(new_frame->rgb_img_, p_img, 3, cv::Scalar(0, 255, 0), cv::FILLED);
-//        }
-//    }
-//
-//    cv::imshow ( "current", new_frame->rgb_img_ );
-//    cv::waitKey(0);
-//    //////////////////////////////////////////////////////////////
-
     return success;
 }
 

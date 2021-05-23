@@ -11,6 +11,7 @@
 #include "myslam/common_include.h"
 #include "myslam/frame.h"
 #include "myslam/map.h"
+#include "myslam/dataset.h"
 
 namespace myslam {
 
@@ -81,9 +82,9 @@ private:
      * estimate current frame's pose
      * @return num of inliers
      */
-    int EstimateCurrentPoseByG2O();
+    int EstimateMotionByEpipolarGeometry1();
 
-    int EstimateMotionByEpipolarGeometry();
+    int EstimateMotionByEpipolarGeometry2();
 
     int EstimateCurrentPoseByPNP();
 
@@ -116,6 +117,8 @@ private:
 
     void LocalBundleAdjustment();
 
+    void PoseOptimization();
+
     // data
     FrontendStatus status_ = FrontendStatus::BLANK;
 
@@ -132,12 +135,20 @@ private:
     int tracking_inliers_ = 0;  // inliers, used for testing new keyframes
 
     // params
-    int num_features_tracking_ = 50;
-    int num_features_tracking_bad_ = 5;
+    int num_features_tracking_ = 3000;
+    int num_features_tracking_bad_ = 2000;
     int num_features_needed_for_keyframe_ = 80;
 
     // utilities
     cv::Ptr<cv::ORB> orb_;  // feature detector in opencv
+
+    // frames buffer for local bundle adjustment
+    deque<Frame::Ptr> frames_buff_;
+
+    cv::Mat pose_init_;              // Tcw 形式, 优化之前的 Pose
+
+    // dataset
+    Dataset::Ptr dataset_ = nullptr;
 };
 
 }  // namespace myslam

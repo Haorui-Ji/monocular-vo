@@ -109,5 +109,15 @@ Frame::Ptr Dataset::NextFrame() {
     return new_frame;
 }
 
+double Dataset::GetAbsoluteScale(int frame_id)
+{
+    vector<float> prev = ground_truth_poses_[frame_id - 1];
+    vector<float> cur = ground_truth_poses_[frame_id];
+    return sqrt(
+            (cur[3] - prev[3]) * (cur[3] - prev[3]) +
+            (cur[7] - prev[7]) * (cur[7] - prev[7]) +
+            (cur[11] - prev[11]) * (cur[11] - prev[11])) ;
+}
+
 
 }  // namespace myslam
