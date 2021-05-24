@@ -23,10 +23,7 @@ Frontend::Frontend()
 
     // -- Create ORB
     orb_ = cv::ORB::create(num_keypoints, scale_factor, level_pyramid,
-                           31, 0, 2, cv::ORB::FAST_SCORE, 31, score_threshold);
-    dataset_ =
-            Dataset::Ptr(new Dataset(Config::Get<std::string>("dataset_dir")));
-    CHECK_EQ(dataset_->Init(), true);
+                           31, 0, 2, cv::ORB::HARRIS_SCORE, 31, score_threshold);
 }
 
 bool Frontend::AddFrame(Frame::Ptr frame)
@@ -35,16 +32,19 @@ bool Frontend::AddFrame(Frame::Ptr frame)
 
     frames_buff_.push_back(current_frame_);
 
+    DetectFeatures();
+
     LOG(INFO) << "Current status: " << static_cast<std::underlying_type<FrontendStatus>::type>(status_);
 
     switch (status_) {
         case FrontendStatus::BLANK:
             current_frame_->SetPose(cv::Mat::eye(4, 4, CV_64F));
-            DetectFeatures();
             reference_frame_ = current_frame_;
             status_ = FrontendStatus::INITING;
             break;
         case FrontendStatus::INITING:
+            MonoInit();
+            break;
         case FrontendStatus::TRACKING_GOOD:
         case FrontendStatus::TRACKING_BAD:
             Track();
@@ -54,6 +54,7 @@ bool Frontend::AddFrame(Frame::Ptr frame)
     if (last_frame_ != nullptr) {
         cv::Mat t = getPosFromT(current_frame_->Pose());
         cv::Mat t_relative = getPosFromT(relative_motion_);
+        LOG(INFO) << "\nCamera motion:" << endl;
         LOG(INFO) << "Motion w.r.t World:\n " << current_frame_->Pose().inv() << endl;
 //        LOG(INFO) << "Motion w.r.t last frame:\n " << t_relative << endl;
     }
@@ -87,9 +88,9 @@ bool Frontend::MonoInit()
 
     MatchFeatures(
             reference_frame_->features_, current_frame_->features_, current_frame_->matches_with_ref_frame_);
-    LOG(INFO) << "Number of matches with the 1st reference frame:" << current_frame_->matches_with_ref_frame_.size();
+    LOG(INFO) << "Number of matches with the reference frame:" << current_frame_->matches_with_ref_frame_.size();
 
-    tracking_inliers_ = EstimateMotionByEpipolarGeometry1();
+    tracking_inliers_ = EstimateMotionByEpipolarGeometry();
 
     // Check initialization condition:
     printf("\nCheck VO init conditions: \n");
@@ -159,7 +160,6 @@ bool Frontend::BuildInitMap()
         p_world.push_back(transCoord(p_3d_ref[i], reference_frame_->Pose().inv()));
     }
 
-
     for (int i = 0; i < feasibility.size(); i++)
     {
         if (feasibility[i])
@@ -189,12 +189,9 @@ bool Frontend::BuildInitMap()
 
 bool Frontend::Track()
 {
-    current_frame_->SetPose(last_frame_->Pose());
-
     TrackLastFrame();
 
-//    tracking_inliers_ = EstimateCurrentPoseByPNP();
-    tracking_inliers_ = EstimateMotionByEpipolarGeometry2();
+    tracking_inliers_ = EstimateCurrentPoseByPNP();
 
     LOG(INFO) << "Tracking inliers: " << tracking_inliers_;
 
@@ -206,14 +203,14 @@ bool Frontend::Track()
         status_ = FrontendStatus::TRACKING_BAD;
     } else {
         // lost
-        DetectFeatures();
+        status_ = FrontendStatus::LOST;
     }
 
-//    if (status_ == FrontendStatus::TRACKING_GOOD || status_ == FrontendStatus::TRACKING_BAD) {
-//        InsertKeyframe();
-//    } else {
-//        Reset();
-//    }
+    if (status_ == FrontendStatus::TRACKING_GOOD || status_ == FrontendStatus::TRACKING_BAD) {
+        InsertKeyframe();
+    } else {
+        Reset();
+    }
 
     relative_motion_ = current_frame_->Pose() * last_frame_->Pose().inv();
 
@@ -234,18 +231,17 @@ bool Frontend::InsertKeyframe()
     LOG(INFO) << "Set frame " << current_frame_->id_ << " as keyframe "
               << current_frame_->keyframe_id_;
 
+    LocalBundleAdjustment();
+
     SetObservationsForKeyFrame();
 
     // triangulate map points
     TriangulateNewPoints();
 
-//    // call local bundle adjustment
-//    LocalBundleAdjustment();
-//
-//    // triangulate map points
-//    TriangulateNewPoints();
-
     reference_frame_ = current_frame_;
+
+    // update backend because we have a new keyframe
+//    backend_->UpdateMap();
 
     return true;
 }
@@ -310,6 +306,7 @@ int Frontend::TriangulateNewPoints()
             inlier_pts_in_ref_frame.push_back(reference_frame_->features_[match.queryIdx]->position_.pt);
             inlier_pts_in_curr_frame.push_back(current_frame_->features_[match.trainIdx]->position_.pt);
         }
+
     }
 
     vector<cv::Point3f> p_3d_ref, p_world;
@@ -343,7 +340,7 @@ int Frontend::TriangulateNewPoints()
     return cnt_triangulated_pts;
 }
 
-int Frontend::EstimateMotionByEpipolarGeometry1()
+int Frontend::EstimateMotionByEpipolarGeometry()
 {
     vector<cv::Point2f> pts_in_img1;
     vector<cv::Point2f> pts_in_img2;
@@ -361,7 +358,6 @@ int Frontend::EstimateMotionByEpipolarGeometry1()
     essential_matrix = findEssentialMat(
             pts_in_img1, pts_in_img2, camera_->K_,
             cv::RANSAC, findEssentialMat_prob, findEssentialMat_threshold, inliers_mask);
-    essential_matrix /= essential_matrix.at<double>(2, 2);
 
     // Get inliers
     int num_inliers = 0;
@@ -379,101 +375,13 @@ int Frontend::EstimateMotionByEpipolarGeometry1()
     cv::Mat R, t;
     recoverPose(essential_matrix, pts_in_img1, pts_in_img2, camera_->K_, R, t, inliers_mask);
 
-//    // Normalize t
-//    t = t / cv::norm(t);
+    // Normalize t to set the distance as 1
+    t = t / cv::norm(t);
 
     relative_motion_ = convertRt2T(R, t);
     current_frame_->SetPose(relative_motion_ * reference_frame_->Pose());
 
     return num_inliers;
-}
-
-int Frontend::EstimateMotionByEpipolarGeometry2()
-{
-    vector<cv::Point2f> pts_in_img1;
-    vector<cv::Point2f> pts_in_img2;
-    for (int i = 0; i < current_frame_->matches_with_last_frame_.size(); i++) {
-        cv::DMatch match = current_frame_->matches_with_last_frame_[i];
-        pts_in_img1.push_back(last_frame_->features_[match.queryIdx]->position_.pt);
-        pts_in_img2.push_back(current_frame_->features_[match.trainIdx]->position_.pt);
-    }
-
-    // -- Essential matrix
-    LOG(INFO) << "Estimate motion";
-    static auto findEssentialMat_prob = Config::Get<double>("findEssentialMat_prob");
-    static auto findEssentialMat_threshold = Config::Get<double>("findEssentialMat_threshold");
-    cv::Mat inliers_mask;
-    cv::Mat essential_matrix;
-    essential_matrix = findEssentialMat(
-            pts_in_img1, pts_in_img2, camera_->K_,
-            cv::RANSAC, findEssentialMat_prob, findEssentialMat_threshold, inliers_mask);
-
-    // Get inliers
-    int num_inliers = 0;
-    for (int i = 0; i < inliers_mask.rows; i++)
-    {
-        if ((int)inliers_mask.at<unsigned char>(i, 0) == 1)
-        {
-            cv::DMatch match = current_frame_->matches_with_last_frame_[i];
-            current_frame_->features_[match.trainIdx]->is_inlier_ = true;
-            num_inliers++;
-        }
-    }
-
-    // Recover R,t from Essential matrix
-    cv::Mat R, t;
-    recoverPose(essential_matrix, pts_in_img1, pts_in_img2, camera_->K_, R, t, inliers_mask);
-
-//    // Normalize t
-//    t = t / cv::norm(t);
-
-    // Get absolute scale
-    double scale = dataset_->GetAbsoluteScale(current_frame_->id_);
-    LOG(INFO) << "Recover scale: " << scale;
-    if (scale > 0.1) {
-        t = t * scale;
-        relative_motion_ = convertRt2T(R, t);
-        current_frame_->SetPose(relative_motion_ * last_frame_->Pose());
-    }
-
-    return num_inliers;
-}
-
-int Frontend::TrackLastFrame()
-{
-    // use LK flow to track features from last frame
-    vector<cv::Point2f> kps_last, kps_current;
-    for (auto &kp : last_frame_->features_) {
-        kps_last.push_back(kp->position_.pt);
-        kps_current.push_back(kp->position_.pt);
-    }
-
-    std::vector<uchar> status;
-    Mat error;
-
-    cv::calcOpticalFlowPyrLK(
-            last_frame_->rgb_img_, current_frame_->rgb_img_, kps_last,
-            kps_current, status, error, cv::Size(21, 21), 4,
-            cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30,
-                             0.01),
-            cv::OPTFLOW_USE_INITIAL_FLOW);
-
-    int num_good_pts = 0;
-
-    for (int idx = 0; idx < status.size(); idx++) {
-        if (status[idx]) {
-            cv::KeyPoint kp(kps_current[idx], 7);
-            Feature::Ptr feature(new Feature(current_frame_, kp));
-            current_frame_->features_.push_back(feature);
-
-            cv::DMatch match = cv::DMatch(idx, num_good_pts, 10);
-            current_frame_->matches_with_last_frame_.push_back(match);
-            num_good_pts++;
-        }
-    }
-
-    LOG(INFO) << "Find " << num_good_pts << " in the last image.";
-    return num_good_pts;
 }
 
 int Frontend::EstimateCurrentPoseByPNP()
@@ -504,8 +412,8 @@ int Frontend::EstimateCurrentPoseByPNP()
     if (is_pnp_good) {
         bool useExtrinsicGuess = false;      // provide initial guess
         int iterationsCount = 100;
-        float reprojectionError = 4.0;
-        double confidence = 0.99;
+        float reprojectionError = 2.0;
+        double confidence = 0.999;
         cv::solvePnPRansac(pts_3d, pts_2d, camera_->K_, cv::Mat(), rvec, tvec,
                            useExtrinsicGuess,
                            iterationsCount, reprojectionError, confidence, pnp_inliers_mask, cv::SOLVEPNP_ITERATIVE);
@@ -513,44 +421,25 @@ int Frontend::EstimateCurrentPoseByPNP()
         cv::Rodrigues(rvec, R); // angle-axis rotation to 3x3 rotation matrix
         pose_init_ = convertRt2T(R, tvec);
 
-        // Pose optimize
         PoseOptimization();
 
-        LOG(INFO) << "Optimization finish";
-
-        for (int i = 0; i < features.size(); i++)
+        for (int i = 0; i < pnp_inliers_mask.rows; i++)
         {
-            auto mappoint = features[i]->map_point_.lock();
+            int good_idx = pnp_inliers_mask.at<int>(i, 0);
+
+            auto mappoint = features[good_idx]->map_point_.lock();
             auto p_proj = camera_->world2pixel(mappoint->pos_, pose_init_);
-            auto p_img = features[i]->position_.pt;
+            auto p_img = features[good_idx]->position_.pt;
 
             float reprojectionError = (p_proj.x - p_img.x) * (p_proj.x - p_img.x) \
                                 + (p_proj.y - p_img.y) * (p_proj.y - p_img.y);
 
-            if (reprojectionError <= 4 )
+            if (reprojectionError <= 4)
             {
-                features[i]->is_inlier_ = true;
+                features[good_idx]->is_inlier_ = true;
                 num_inliers++;
             }
         }
-
-//        for (int i = 0; i < pnp_inliers_mask.rows; i++)
-//        {
-//            int good_idx = pnp_inliers_mask.at<int>(i, 0);
-//
-//            auto mappoint = features[good_idx]->map_point_.lock();
-//            auto p_proj = camera_->world2pixel(mappoint->pos_, pose_init_);
-//            auto p_img = features[good_idx]->position_.pt;
-//
-//            float reprojectionError = (p_proj.x - p_img.x) * (p_proj.x - p_img.x) \
-//                                    + (p_proj.y - p_img.y) * (p_proj.y - p_img.y);
-//
-//            if (reprojectionError <= 4 )
-//            {
-//                features[good_idx]->is_inlier_ = true;
-//                num_inliers++;
-//            }
-//        }
 
         if (num_inliers > num_features_tracking_bad_) {
             current_frame_->SetPose(pose_init_);
@@ -598,16 +487,10 @@ void Frontend::LocalBundleAdjustment()
         frames.insert({frame->id_, frame});
     }
 
-    unsigned long max_frame_id = frames_buff_.size();
-
-    // 路标顶点，使用路标id索引
-    std::map<unsigned long, g2o::VertexPointXYZ*> vertices_landmarks;
-    std::map<unsigned long, MapPoint::Ptr> landmarks;
-
-    std::vector<g2o::EdgeSE3ProjectXYZ *> edges;
+    std::vector<g2o::EdgeSE3ProjectXYZOnlyPose *> edges;
     std::vector<Feature::Ptr> features;
 
-    LOG(INFO) << "Add mappoint vertices and edges";
+    LOG(INFO) << "Add edges";
     int index = 1;
     for (int i = 0; i < frames_buff_.size(); i++)
     {
@@ -618,31 +501,13 @@ void Frontend::LocalBundleAdjustment()
             auto feature = frame->features_[j];
             auto mp = feature->map_point_.lock();
 
-            if (mp && feature->is_inlier_)
+            if (mp)
             {
                 features.push_back(feature);
 
-                // mappoint vertex
-                if (vertices_landmarks.find(mp->id_) ==
-                    vertices_landmarks.end()) {
-                    g2o::VertexPointXYZ* vPoint = new g2o::VertexPointXYZ();
-                    vPoint->setId(max_frame_id + mp->id_);
-                    vPoint->setEstimate(toVector3d(mp->pos_));
-                    vPoint->setMarginalized(true);
-                    vertices_landmarks.insert({mp->id_, vPoint});
-                    landmarks.insert({mp->id_, mp});
-                    optimizer.addVertex(vPoint);
-                }
-
-
-                g2o::EdgeSE3ProjectXYZ* e = new g2o::EdgeSE3ProjectXYZ();
+                g2o::EdgeSE3ProjectXYZOnlyPose* e = new g2o::EdgeSE3ProjectXYZOnlyPose();
                 e->setId(index);
-
-                // 第0个顶点对应的id 是地图点的id
-                e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(vertices_landmarks.at(mp->id_)));
-                // 第1个顶点对应的id是 关键帧的id
-                e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(vertices_poses.at(frame->id_)));
-
+                e->setVertex(0, vertices_poses[frame->id_]);
                 e->setMeasurement(Eigen::Vector2d(feature->position_.pt.x, feature->position_.pt.y));
                 e->setInformation(Eigen::Matrix2d::Identity());
 
@@ -657,20 +522,23 @@ void Frontend::LocalBundleAdjustment()
                 e->cx = camera_->cx_;
                 e->cy = camera_->cy_;
 
-                edges.push_back(e);
+                // 地图点的空间位置,作为迭代的初始值
+                e->Xw[0] = mp->pos_.x;
+                e->Xw[1] = mp->pos_.y;
+                e->Xw[2] = mp->pos_.z;
+
                 optimizer.addEdge(e);
+
+                edges.push_back(e);
                 index++;
             }
         }
     }
 
-    LOG(INFO) << "Begin optimization";
     // do optimization and eliminate the outliers
     optimizer.initializeOptimization();
-    optimizer.optimize(50);
+    optimizer.optimize(20);
 
-    LOG(INFO) << "Optimization finish";
-    double error_threshold = 16;
     // count the outliers
     int cnt_outliers = 0;
     for (int i = 0; i < edges.size(); i++)
@@ -679,8 +547,7 @@ void Frontend::LocalBundleAdjustment()
 
         e->computeError();
         Eigen::Matrix<double, 2, 1> error = e->error();
-        LOG(INFO) << error(0, 0) << '\t' << error(1, 0);
-//        if ((error(0, 0) * error(0, 0) + error(1, 0) * error(1, 0)) > error_threshold) {
+//        LOG(INFO) << error(0, 0) << '\t' << error(1, 0);
         if (e->chi2() > 5.991) {
             features[i]->is_inlier_ = false;
             cnt_outliers++;
@@ -692,10 +559,7 @@ void Frontend::LocalBundleAdjustment()
 
     // Set pose and lanrmark position
     for (auto &v : vertices_poses) {
-        frames.at(v.first)->SetPose(toCvMat(v.second->estimate()));
-    }
-    for (auto &v : vertices_landmarks) {
-        landmarks.at(v.first)->SetPos(toPoint3f(v.second->estimate()));
+        frames[v.first]->SetPose(toCvMat(v.second->estimate()));
     }
 
     for (auto &feat : features) {
@@ -764,8 +628,6 @@ void Frontend::PoseOptimization()
             e->Xw[2] = mp->pos_.z;
 
             optimizer.addEdge(e);
-
-            optimizer.addEdge(e);
             index++;
         }
     }
@@ -778,30 +640,31 @@ void Frontend::PoseOptimization()
 
 }
 
-//int Frontend::TrackLastFrame()
-//{
-//    int num_good_pts = 0;
-//
-//    // Descriptor tracking
-//    MatchFeatures(
-//            last_frame_->features_, current_frame_->features_, current_frame_->matches_with_last_frame_);
-//
-//    for (int i = 0; i < current_frame_->matches_with_last_frame_.size(); ++i) {
-//        cv::DMatch match = current_frame_->matches_with_last_frame_[i];
-//
-//        auto current_feature = current_frame_->features_[match.trainIdx];
-//        auto last_feature = last_frame_->features_[match.queryIdx];
-//
-//        if (last_feature->map_point_.lock())
-//        {
-//            current_feature->map_point_ = last_feature->map_point_.lock();
-//            num_good_pts++;
-//        }
-//    }
-//
-//    LOG(INFO) << "Find " << num_good_pts << " good 2D matches with last frame";
-//    return num_good_pts;
-//}
+int Frontend::TrackLastFrame()
+{
+    int num_good_pts = 0;
+
+    // Descriptor tracking
+    MatchFeatures(
+            last_frame_->features_, current_frame_->features_, current_frame_->matches_with_last_frame_);
+
+    for (int i = 0; i < current_frame_->matches_with_last_frame_.size(); ++i) {
+        cv::DMatch match = current_frame_->matches_with_last_frame_[i];
+
+        auto current_feature = current_frame_->features_[match.trainIdx];
+        auto last_feature = last_frame_->features_[match.queryIdx];
+
+        if (last_feature->map_point_.lock() &&
+            (last_feature->is_inlier_ || last_feature->associate_new_map_point_))
+        {
+            current_feature->map_point_ = last_feature->map_point_.lock();
+            num_good_pts++;
+        }
+    }
+
+    LOG(INFO) << "Find " << num_good_pts << " good 2D matches with last frame";
+    return num_good_pts;
+}
 
 bool Frontend::Reset()
 {
@@ -817,30 +680,16 @@ int Frontend::DetectFeatures() {
     cv::Mat descriptors;
     // detect keypoints and descriptors
     orb_->detect(current_frame_->rgb_img_, keypoints);
-//    orb_->compute(current_frame_->rgb_img_, keypoints, descriptors);
+    orb_->compute(current_frame_->rgb_img_, keypoints, descriptors);
 //    descriptors.convertTo(descriptors, CV_32F);
 
     int cnt_detected = 0;
-    current_frame_->features_.clear();
     for (int i = 0; i < keypoints.size(); i++)
     {
         current_frame_->features_.push_back(
-                Feature::Ptr(new Feature(current_frame_, keypoints[i])));
+                Feature::Ptr(new Feature(current_frame_, keypoints[i], descriptors.row(i))));
         cnt_detected++;
     }
-
-//    vector<cv::KeyPoint> keypoints;
-//    int fast_threshold = 20;
-//    bool nonmaxSuppression = true;
-//    FAST(current_frame_->rgb_img_, keypoints, fast_threshold, nonmaxSuppression);
-//
-//    int cnt_detected = 0;
-//    for (int i = 0; i < keypoints.size(); i++)
-//    {
-//        current_frame_->features_.push_back(
-//                Feature::Ptr(new Feature(current_frame_, keypoints[i])));
-//        cnt_detected++;
-//    }
 
     LOG(INFO) << "Detect " << cnt_detected << " new features";
     return cnt_detected;

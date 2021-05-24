@@ -88,10 +88,11 @@ void MatchFeatures(
     }
 
     double match_ratio = Config::Get<double>("match_ratio");
-    cv::FlannBasedMatcher matcher_flann(new cv::flann::LshIndexParams(5, 10, 2));
+    cv::FlannBasedMatcher matcher(new cv::flann::LshIndexParams(5, 10, 2));
+//    cv::Ptr<cv::FlannBasedMatcher> matcher = cv::FlannBasedMatcher::create();
+//    cv::Ptr<cv::BFMatcher> matcher = cv::DescriptorMatcher::create ( "BruteForce-Hamming" );
     vector<cv::DMatch> all_matches;
-
-    matcher_flann.match(descriptors_1, descriptors_2, all_matches);
+    matcher.match(descriptors_1, descriptors_2, all_matches);
 
     double min_dist = 10000, max_dist = 0;
 

@@ -82,9 +82,7 @@ private:
      * estimate current frame's pose
      * @return num of inliers
      */
-    int EstimateMotionByEpipolarGeometry1();
-
-    int EstimateMotionByEpipolarGeometry2();
+    int EstimateMotionByEpipolarGeometry();
 
     int EstimateCurrentPoseByPNP();
 
@@ -135,8 +133,8 @@ private:
     int tracking_inliers_ = 0;  // inliers, used for testing new keyframes
 
     // params
-    int num_features_tracking_ = 3000;
-    int num_features_tracking_bad_ = 2000;
+    int num_features_tracking_ = 50;
+    int num_features_tracking_bad_ = 5;
     int num_features_needed_for_keyframe_ = 80;
 
     // utilities
@@ -146,9 +144,6 @@ private:
     deque<Frame::Ptr> frames_buff_;
 
     cv::Mat pose_init_;              // Tcw 形式, 优化之前的 Pose
-
-    // dataset
-    Dataset::Ptr dataset_ = nullptr;
 };
 
 }  // namespace myslam
