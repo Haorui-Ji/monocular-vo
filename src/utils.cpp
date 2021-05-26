@@ -97,4 +97,34 @@ namespace myslam {
         assert(norm != 0);
         return acos(res / norm);
     }
+
+    bool checkDistEpipolarLine(
+            const cv::Point2f &pt1,
+            const cv::Point2f &pt2,
+            const cv::Mat &F12,
+            const float threshold)
+    {
+        // Epipolar line in second image l2 = x1'F12 = [a b c]
+        // Step 1 求出kp1在pKF2上对应的极线
+        const float a = pt1.x*F12.at<double>(0,0)+pt1.y*F12.at<double>(1,0)+F12.at<double>(2,0);
+        const float b = pt1.x*F12.at<double>(0,1)+pt1.y*F12.at<double>(1,1)+F12.at<double>(2,1);
+        const float c = pt1.x*F12.at<double>(0,2)+pt1.y*F12.at<double>(1,2)+F12.at<double>(2,2);
+
+        // Step 2 计算kp2特征点到极线l2的距离
+        // 极线l2：ax + by + c = 0
+        // (u,v)到l2的距离为： |au+bv+c| / sqrt(a^2+b^2)
+
+        const float num = a * pt2.x + b * pt2.y + c;
+
+        const float den = a * a + b * b;
+
+        // 距离无穷大
+        if(den==0)
+            return false;
+
+        // 距离的平方
+        const float dsqr = num * num / den;
+
+        return dsqr < threshold;
+    }
 }

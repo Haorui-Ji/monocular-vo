@@ -231,7 +231,7 @@ bool Frontend::InsertKeyframe()
     LOG(INFO) << "Set frame " << current_frame_->id_ << " as keyframe "
               << current_frame_->keyframe_id_;
 
-    LocalBundleAdjustment();
+//    LocalBundleAdjustment();
 
     SetObservationsForKeyFrame();
 
@@ -283,7 +283,13 @@ int Frontend::TriangulateNewPoints()
 {
     MatchFeatures(
             reference_frame_->features_, current_frame_->features_, current_frame_->matches_with_ref_frame_);
-    LOG(INFO) << "Number of matches with the previous reference frame:" << current_frame_->matches_with_ref_frame_.size();
+
+//    FindInliersByEpipolar(
+//        reference_frame_->Pose(), current_frame_->Pose(), camera_,
+//        reference_frame_->features_, current_frame_->features_,
+//        current_frame_->matches_with_ref_frame_);
+
+    LOG(INFO) << "Number of inlier matches with the previous reference frame:" << current_frame_->matches_with_ref_frame_.size();
 
     cv::Mat R, t;
     cv::Mat relative_motion_with_ref = current_frame_->Pose() * reference_frame_->Pose().inv();
@@ -339,6 +345,78 @@ int Frontend::TriangulateNewPoints()
     LOG(INFO) << "new landmarks: " << cnt_triangulated_pts;
     return cnt_triangulated_pts;
 }
+
+//int Frontend::TriangulateNewPoints()
+//{
+//    MatchFeatures(
+//            reference_frame_->features_, current_frame_->features_, current_frame_->matches_with_ref_frame_);
+//
+////    FindInliersByEpipolar(
+////            reference_frame_->Pose(), current_frame_->Pose(), camera_,
+////            reference_frame_->features_, current_frame_->features_,
+////            current_frame_->matches_with_ref_frame_);
+//
+//    LOG(INFO) << "Number of inlier matches with the previous reference frame:" << current_frame_->matches_with_ref_frame_.size();
+//
+//    cv::Mat R, t;
+//    cv::Mat relative_motion_with_ref = current_frame_->Pose() * reference_frame_->Pose().inv();
+//    getRtFromT(relative_motion_with_ref, R, t);
+//
+//    int cnt_triangulated_pts = 0;
+//    vector<std::shared_ptr<Feature>> inlier_features_ref, inlier_features_curr;
+//    vector<cv::Point2f> inlier_pts_in_ref_frame, inlier_pts_in_curr_frame;
+//
+//    // Extract inlier matches between frames
+//    for (int i = 0; i < current_frame_->matches_with_ref_frame_.size(); i++)
+//    {
+//        cv::DMatch match = current_frame_->matches_with_ref_frame_[i];
+//
+//        inlier_features_ref.push_back(reference_frame_->features_[match.queryIdx]);
+//        inlier_features_curr.push_back(current_frame_->features_[match.trainIdx]);
+//        inlier_pts_in_ref_frame.push_back(reference_frame_->features_[match.queryIdx]->position_.pt);
+//        inlier_pts_in_curr_frame.push_back(current_frame_->features_[match.trainIdx]->position_.pt);
+//    }
+//
+//    vector<cv::Point3f> p_3d_ref, p_world;
+//    Triangulation(inlier_pts_in_ref_frame, inlier_pts_in_curr_frame, camera_, R, t, p_3d_ref);
+//
+//    vector<bool> feasibility = CheckGoodTriangulationResult(
+//            reference_frame_->Pose(), current_frame_->Pose(), camera_,
+//            p_3d_ref, inlier_pts_in_ref_frame, inlier_pts_in_curr_frame);
+//
+//    for (int i = 0; i < p_3d_ref.size(); i++) {
+//        p_world.push_back(transCoord(p_3d_ref[i], reference_frame_->Pose().inv()));
+//    }
+//
+//    for (int i = 0; i < feasibility.size(); i++)
+//    {
+//        if (feasibility[i])
+//        {
+//            if (inlier_features_ref[i]->map_point_.lock() &&
+//                inlier_features_curr[i]->map_point_.lock()) {
+//                inlier_features_ref[i]->map_point_.lock()->SetPos(p_world[i]);
+//                inlier_features_curr[i]->map_point_.lock()->SetPos(p_world[i]);
+//            } else {
+//                auto new_map_point = MapPoint::CreateNewMappoint();
+//                new_map_point->SetPos(p_world[i]);
+//                new_map_point->AddObservation(inlier_features_ref[i]);
+//                new_map_point->AddObservation(inlier_features_curr[i]);
+//
+//                inlier_features_ref[i]->map_point_.reset();
+//                inlier_features_ref[i]->map_point_ = new_map_point;
+//
+//                inlier_features_curr[i]->map_point_.reset();
+//                inlier_features_curr[i]->map_point_ = new_map_point;
+//                inlier_features_curr[i]->associate_new_map_point_ = true;
+//                map_->InsertMapPoint(new_map_point);
+//            }
+//            cnt_triangulated_pts++;
+//        }
+//    }
+//
+//    LOG(INFO) << "new landmarks: " << cnt_triangulated_pts;
+//    return cnt_triangulated_pts;
+//}
 
 int Frontend::EstimateMotionByEpipolarGeometry()
 {
@@ -421,8 +499,7 @@ int Frontend::EstimateCurrentPoseByPNP()
         cv::Rodrigues(rvec, R); // angle-axis rotation to 3x3 rotation matrix
         pose_init_ = convertRt2T(R, tvec);
 
-        PoseOptimization();
-
+//        PoseOptimization();
         for (int i = 0; i < pnp_inliers_mask.rows; i++)
         {
             int good_idx = pnp_inliers_mask.at<int>(i, 0);
@@ -634,7 +711,7 @@ void Frontend::PoseOptimization()
 
     // do optimization and eliminate the outliers
     optimizer.initializeOptimization();
-    optimizer.optimize(10);
+    optimizer.optimize(15);
 
     pose_init_ = toCvMat(vSE3->estimate());
 

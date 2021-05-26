@@ -8,61 +8,6 @@
 
 namespace myslam
 {
-std::pair<vector<int>, vector<double>> FindBestMatches(
-        const cv::Mat &descriptors_1,
-        const cv::Mat &descriptors_2,
-        vector<cv::DMatch> &matches)
-{
-    // find best matches
-    vector<int> idx(descriptors_1.rows);
-    vector<double> dist(descriptors_1.rows);
-    for (int i = 0; i < descriptors_1.rows; i++) {
-        int bestMatch = -1;
-        double bestDist = 1e10;
-        for (int j = 0; j < matches.size(); j++) {
-            if (matches[j].queryIdx == i && matches[j].distance < bestDist) {
-                bestDist = matches[j].distance;
-                bestMatch = matches[j].trainIdx;
-            }
-        }
-        idx[i] = bestMatch;
-        dist[i] = bestDist;
-    }
-
-    // We still need to consider the possibility that for a feature in feature_1,
-    // there's no feature in feature_2 that corresponds with it
-    return std::make_pair(idx, dist);
-}
-
-std::pair<vector<int>, vector<double>> MatchFeaturesHelper(
-        const cv::Mat &descriptors_1,
-        const cv::Mat &descriptors_2,
-        vector<cv::DMatch> &matches)
-{
-    double match_ratio = Config::Get<double>("match_ratio");
-    cv::FlannBasedMatcher matcher_flann(new cv::flann::LshIndexParams(5, 10, 2));
-    vector<cv::DMatch> all_matches;
-
-    matcher_flann.match(descriptors_1, descriptors_2, all_matches);
-
-    double min_dist = 10000, max_dist = 0;
-
-    for (int i = 0; i < all_matches.size(); i++) {
-        double dist = all_matches[i].distance;
-        if (dist < min_dist) min_dist = dist;
-        if (dist > max_dist) max_dist = dist;
-    }
-
-    // Select good matches and push to the result vector.
-    for (cv::DMatch &m : all_matches) {
-        if (m.distance <= max(min_dist * match_ratio, 50.0)) {
-            matches.push_back(m);
-        }
-    }
-
-    // find best matches
-    return FindBestMatches(descriptors_1, descriptors_2, matches);
-}
 
 void MatchFeatures(
         const vector<std::shared_ptr<Feature>> &features_1,
@@ -90,7 +35,7 @@ void MatchFeatures(
     double match_ratio = Config::Get<double>("match_ratio");
     cv::FlannBasedMatcher matcher(new cv::flann::LshIndexParams(5, 10, 2));
 //    cv::Ptr<cv::FlannBasedMatcher> matcher = cv::FlannBasedMatcher::create();
-//    cv::Ptr<cv::BFMatcher> matcher = cv::DescriptorMatcher::create ( "BruteForce-Hamming" );
+//    auto matcher = cv::DescriptorMatcher::create ( "BruteForce-Hamming" );
     vector<cv::DMatch> all_matches;
     matcher.match(descriptors_1, descriptors_2, all_matches);
 
@@ -109,48 +54,6 @@ void MatchFeatures(
         }
     }
 }
-
-//void MatchFeatures(
-//        const vector<std::shared_ptr<Feature>> &features_1,
-//        const vector<std::shared_ptr<Feature>> &features_2,
-//        vector<cv::DMatch> &matches)
-//{
-//    int rows_1 = features_1.size();
-//    int cols_1 = features_1[0]->descriptor_.cols;
-//
-//    int rows_2 = features_2.size();
-//    int cols_2 = features_2[0]->descriptor_.cols;
-//
-//    cv::Mat descriptors_1(rows_1, cols_1, CV_8U);
-//    cv::Mat descriptors_2(rows_2, cols_2, CV_8U);
-//
-//    for (int i = 0; i < features_1.size(); i++ )
-//    {
-//        features_1[i]->descriptor_.copyTo(descriptors_1.row(i));
-//    }
-//    for (int j = 0; j < features_2.size(); j++ )
-//    {
-//        features_2[j]->descriptor_.copyTo(descriptors_2.row(j));
-//    }
-//
-//    vector<cv::DMatch> all_matches_12, all_matches_21;
-//
-//    std::pair<vector<int>, vector<double>> best_matches_12 = MatchFeaturesHelper(descriptors_1, descriptors_2,
-//                                                                                 all_matches_12);
-//    std::pair<vector<int>, vector<double>> best_matches_21 = MatchFeaturesHelper(descriptors_2, descriptors_1,
-//                                                                                 all_matches_21);
-//
-//    for (int idx1 = 0; idx1 < (int) best_matches_12.first.size(); idx1++) {
-//        int idx2 = best_matches_12.first[idx1];
-//        if (idx2 != -1) // it means we can find corresponding matches in feature_2
-//        {
-//            if (best_matches_21.first[idx2] == idx1) {
-//                cv::DMatch match = cv::DMatch(idx1, idx2, best_matches_12.second[idx1]);
-//                matches.push_back(match);
-//            }
-//        }
-//    }
-//}
 
 void Triangulation(
         const vector<cv::Point2f> &inlier_pts_in_img1,
@@ -313,26 +216,48 @@ vector<bool> CheckGoodTriangulationResult(
         }
     }
 
-//    ///////////////////////////////////
-//    // Test
-//    int cnt_false_3 = 0;
-//    int cnt_true_3 = 0;
-//    for (int i = 0; i < N; i++)
-//    {
-//        if (feasibility[i] == false)
-//        {
-//            cnt_false_3++;
-//        }
-//        else
-//        {
-//            cnt_true_3++;
-//        }
-//    }
-//    printf("Stage 3:\n Total: %d, true: %d, false: %d\n", N, cnt_true_3, cnt_false_3);
-//    ///////////////////////////////////
-
     return feasibility;
 
+}
+
+void FindInliersByEpipolar(
+        const cv::Mat &pose_1,
+        const cv::Mat &pose_2,
+        const Camera::Ptr &camera,
+        const vector<std::shared_ptr<Feature>> &features_1,
+        const vector<std::shared_ptr<Feature>> &features_2,
+        vector<cv::DMatch> &matches)
+{
+    cv::Mat K = camera->K_;
+
+    // Construct foudamental matrix
+    cv::Mat R1, t1, R2, t2;
+    getRtFromT(pose_1, R1, t1);
+    getRtFromT(pose_2, R2, t2);
+
+    cv::Mat R12 = R1 * R2.t();
+    cv::Mat t12 = -R1 * R2.t() * t2 + t1;
+
+    cv::Mat t12x = (cv::Mat_<double>(3,3) <<
+                        0, -t12.at<double>(2), t12.at<double>(1),
+                        t12.at<double>(2), 0, -t12.at<double>(0),
+                        -t12.at<double>(1), t12.at<double>(0), 0);
+
+    cv::Mat F12 = K.t().inv() * t12x * R12 * K.inv();
+
+    float threshold = 15.0;
+    vector<cv::DMatch>::iterator it = matches.begin();  //定义正向迭代器
+    while (it != matches.end()) {
+        cv::DMatch match = *it;
+        cv::Point2f point1 = features_1[match.queryIdx]->position_.pt;
+        cv::Point2f point2 = features_1[match.queryIdx]->position_.pt;
+
+        if (checkDistEpipolarLine(point1, point2, F12, threshold) == false) {
+            it = matches.erase(it);
+        } else {
+            it++;
+        }
+    }
 }
 
 }

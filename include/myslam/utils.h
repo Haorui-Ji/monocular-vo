@@ -40,6 +40,12 @@ namespace myslam
 
     double calcAngleBetweenTwoVectors(const cv::Mat &vec1, const cv::Mat &vec2);
 
+    bool checkDistEpipolarLine(
+            const cv::Point2f &pt1,
+            const cv::Point2f &pt2,
+            const cv::Mat &F12,
+            const float threshold);
+
 }
 
 #endif //MYSLAM_UTILS_H

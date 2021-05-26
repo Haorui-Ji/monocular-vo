@@ -32,15 +32,12 @@ vector<bool> CheckGoodTriangulationResult(
         const vector<cv::Point2f> inlier_pts_in_img_1,
         const vector<cv::Point2f> inlier_pts_in_img_2);
 
-// --------------------- Assistant functions ---------------------
-std::pair<vector<int>, vector<double>> FindBestMatches(
-        const cv::Mat &descriptors_1,
-        const cv::Mat &descriptors_2,
-        vector<cv::DMatch> &matches);
-
-std::pair<vector<int>, vector<double>> MatchFeaturesHelper(
-        const cv::Mat &descriptors_1,
-        const cv::Mat &descriptors_2,
+void FindInliersByEpipolar(
+        const cv::Mat &pose_1,
+        const cv::Mat &pose_2,
+        const Camera::Ptr &camera,
+        const vector<std::shared_ptr<Feature>> &features_1,
+        const vector<std::shared_ptr<Feature>> &features_2,
         vector<cv::DMatch> &matches);
 
 }  // namespace myslam
